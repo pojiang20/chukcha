@@ -3,7 +3,9 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/chukcha/protocol"
 	"io"
 	"log"
 	"net/http"
@@ -120,4 +122,114 @@ func (r *Raw) Read(ctx context.Context, addr string, category string, chunk stri
 	}
 
 	return b.Bytes(), true, nil
+}
+
+func (r *Raw) ListChunks(ctx context.Context, addr, category string, fromReplication bool) ([]protocol.Chunk, error) {
+	u := url.Values{}
+	u.Add("category", category)
+	if fromReplication {
+		u.Add("from_replication", "1")
+	}
+
+	listURL := fmt.Sprintf("%s/listChunks?%s", addr, u.Encode())
+
+	req, err := http.NewRequestWithContext(ctx, "GET", listURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating new http request: %w", err)
+	}
+
+	resp, err := r.cl.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("http status %s: %s", resp.Status, body)
+	}
+
+	var res []protocol.Chunk
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil, err
+	}
+
+	if r.debug {
+
+	}
+
+	return res, nil
+}
+
+func (r *Raw) ListCategories(ctx context.Context, addr string) ([]string, error) {
+	listURL := fmt.Sprintf("%s/listtCategories", addr)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", listURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating new http request: %w", err)
+	}
+
+	resp, err := r.cl.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("listCategories error: %s", body)
+	}
+
+	var res []string
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil, err
+	}
+
+	if r.debug {
+
+	}
+	return res, nil
+}
+
+func (r *Raw) Ack(ctx context.Context, addr, category, chunk string, size uint64) error {
+	u := url.Values{}
+	u.Add("chunk", chunk)
+	u.Add("size", strconv.FormatInt(int64(size), 10))
+	u.Add("category", category)
+
+	if r.debug {
+
+	}
+	listURL := fmt.Sprintf(addr+"/ack?%s", u.Encode())
+	req, err := http.NewRequestWithContext(ctx, "GET", listURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating new http request: %w", err)
+	}
+
+	resp, err := r.cl.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("http status %s, %s", resp.Status, body)
+	}
+
+	//TODO 检测是否有必要
+	//io.Copy(io.Discard,resp.Body)
+	return nil
 }
