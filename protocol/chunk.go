@@ -8,6 +8,8 @@ import (
 
 var filenameRegexp = regexp.MustCompile("^chunk([0-9]+)$")
 
+// chunk是要被写入的信息中的数据的一片
+// 它可能是不完整的，这意味着当前它正在被写入
 type Chunk struct {
 	Name     string `json:"name"`
 	Complete bool   `json:"complete"`
